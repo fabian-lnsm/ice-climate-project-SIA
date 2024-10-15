@@ -1,14 +1,10 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Fri Nov  8 16:49:55 2019
 
-@author: wvdberg
-"""
 
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+
 
 totL  = 20000 # total length of the domain [m]
 dx    =   100 # grid size [m]
@@ -32,7 +28,7 @@ fs    =    5.7E-20 # # pa-3 m2 s-1 # this value and dimension is only correct fo
 # this ELA list is not quite systematic, so make it systematic!
 elalist = np.array([1800., 1750., 1700., 1500., 2200., 1900., 1800.,])  # m
 elayear = np.array([ 100,    100,   100,   150,    10,   100,   100], dtype=int)  # years    
-dbdh    =    0.007    # [m/m]/yr
+beta    =    0.007    # [m/m]/yr
 maxb    =    2.      # m/yr
 
 cd    = rho*g*fd  # <<< this must be adjused according to your discretisation
@@ -54,13 +50,13 @@ xhaxs = np.linspace(dx,totL,nx-1,False) / 1000.
 
 bedrock = get_bedrock(xaxis)
 
-dt    = 365.*86400./ntpy # in seconds!
+dt    = 365.*86400./ntpy # length of one timestep in seconds!
 
 hice   = np.zeros(nx)    # ice thickness
 dhdx   = np.zeros(nx)    # the local gradient of h
 fluxd  = np.zeros(nx+2)  # this will be the flux per second!!!!
 fluxs  = np.zeros(nx+2)  # this will be the flux per second!!!!
-dhdtif = np.zeros(nx)    # change in ice thickness due to the ice flux, per second
+dFdx = np.zeros(nx)    # change in ice thickness due to the ice flux, per second
 smb    = np.zeros(nx)
 
 # preparations for the ela-selection
@@ -102,6 +98,8 @@ print("Run model for {0:3d} years".format(nyear))
 for it in range(1, ntpy*nyear+1):
     h = hice + bedrock
     if FluxAtPoints:
+
+        '''
         dhdx[1:-1] = (h[2:]-h[:-2])/(2*dx)
         
         # the following equations needs to be adjusted according to your discretisation
@@ -110,7 +108,8 @@ for it in range(1, ntpy*nyear+1):
         fluxs[1:-1] = cs * (dhdx) * (hice)
 
         # derive flux convergence
-        dhdtif[:]  = (fluxd[2:]-fluxd[:-2]+fluxs[2:]-fluxs[:-2])/(2*dx)
+        dFdx[:]  = (fluxd[2:]-fluxd[:-2]+fluxs[2:]-fluxs[:-2])/(2*dx)
+        '''
     else:
         # the following equations needs to be adjusted according to your discretisation
         dhdx[:-1]  = ((h[1:]-h[:-1])/dx) # so 0 is at 1/2 actually
@@ -119,7 +118,7 @@ for it in range(1, ntpy*nyear+1):
         fluxs[1:-2] = cs * dhdx[:-1] * ( ((hice[1:])+(hice[:-1])) * 0.5 )
         
         # derive flux convergence
-        dhdtif[:]  = (fluxd[1:-1]-fluxd[:-2] + fluxs[1:-1]-fluxs[:-2])/dx
+        dFdx[:]  = (fluxd[1:-1]-fluxd[:-2] + fluxs[1:-1]-fluxs[:-2])/dx
         
     # calculate smb (per year)
     # first update ela (once a year)
@@ -129,10 +128,11 @@ for it in range(1, ntpy*nyear+1):
         # the last one is the current ela
         ela       = elalist[ielanow[-1]]   
         
-    smb[:] = (h-ela)*dbdh
+    smb[:] = (h-ela)*beta
     smb[:] = np.where(smb>maxb, maxb, smb) 
     
-    hice   += smb/ntpy + dt*dhdtif
+    hice += smb/ntpy
+    hice -= dt*dFdx # minus sign added
     hice[:] = np.where(hice<0., 0., hice) # remove negative ice thicknesses
     
     if ZeroFluxBoundary == False:
@@ -151,7 +151,7 @@ for it in range(1, ntpy*nyear+1):
         iframes            += 1
         hsurfmem[:,iframes] = hice + bedrock
         smbmem[:,iframes]   = smb
-        ifdmem[:,iframes]   = dhdtif[:]*365.*86400.
+        ifdmem[:,iframes]   = dFdx[:]*365.*86400.
         fldmem[:,iframes]   = -fluxd[1:-2]*365.*86400.
         flsmem[:,iframes]   = -fluxs[1:-2]*365.*86400.
         if StopWhenOutOfDomain:
