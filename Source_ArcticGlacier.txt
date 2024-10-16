@@ -1,0 +1,9 @@
+https://tc.copernicus.org/articles/18/3591/2024/
+
+Section 3.3
+-----------
+The mean SLA for the 1984–2022 reference period is located at 1267 +/- 84  m a.s.l.,
+considering glaciers within all grid cells.
+Overall, we observe a rise in glacier SLA over the 39 years of observation (Fig. 5).
+A linear regression model, using the yearly mean composite values,
+suggests an average rise in SLA of 3.9±0.4 m yr−1 (R2=0.74, p<0.001)
