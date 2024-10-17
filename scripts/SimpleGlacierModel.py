@@ -11,8 +11,8 @@ dx    =   100 # grid size [m]
 
 ntpy  =   200 # number of timesteps per year
 
-ZeroFluxBoundary = "Your choice" # either no-flux (True) or No-ice boundary (False)
-FluxAtPoints     = "Your choice" # if true, the ice flux is calculated on grid points, 
+ZeroFluxBoundary = False # "Your choice" # either no-flux (True) or No-ice boundary (False)
+FluxAtPoints     = False #"Your choice" # if true, the ice flux is calculated on grid points, 
                         #  otherwise on half points
 StopWhenOutOfDomain = True                        
                         
@@ -23,11 +23,11 @@ rho   =  917.      # kg/m3
 g     =    9.80665 # m/s2
 fd    =    1.9E-24 # # pa-3 s-1 # this value and dimension is only correct for n=3
 fs    =    5.7E-20 # # pa-3 m2 s-1 # this value and dimension is only correct for n=3
-
+years = 100
 
 # adjusted: elalist and elayear. See source file in main directory
 elalist = np.linspace(1400., 2200., 9)  # m
-elayear = np.full_like(elalist, 100, dtype=int)  # years
+elayear = np.full_like(elalist, years, dtype=int)  # years
 beta    =    0.007    # [m/m]/yr
 maxb    =    2.      # m/yr
 
@@ -84,23 +84,27 @@ lengthmem = np.zeros(nyear+1)
 volumemem = np.zeros(nyear+1)
 elamemory = np.zeros(nyear+1)
 yearlist  = np.arange(nyear+1)
+
+#mass calculation
+mass = np.arange(nyear+1)
+mass_change_ela = []
+mass_initial = []
+
 # (re)set initial values so that the accumulation area has glacier right away.
 hice = np.where(bedrock>ela, np.where(hice<0.11, 0.11, hice), hice)
 lengthmem[0] = np.sum(np.where(hice>0.1, dx, 0.))
 volumemem[0] = np.sum(hice)*dx
 elamemory[0] = ela
 
-
-
 cd    = 2./5.*fd*(rho*g)**3  # adjusted
 cs    = fs*(rho*g)**3  # adjusted
-
-#0-----------------------------------------------------------------------------
+#print(ntpy*nyear+1)
+#print(FluxAtPoints)
+#0----------------------------------------------------------------------------- loop over timesteps
 print("Run model for {0:3d} years".format(nyear))
 for it in range(1, ntpy*nyear+1):
     h = hice + bedrock
     if FluxAtPoints:
-
         '''
         dhdx[1:-1] = (h[2:]-h[:-2])/(2*dx)
         
@@ -123,20 +127,27 @@ for it in range(1, ntpy*nyear+1):
         dFdx[:]  = (fluxd[1:-1]-fluxd[:-2] + fluxs[1:-1]-fluxs[:-2])/dx
         
     # calculate smb (per year)
-    # first update ela (once a year)
+    # first update ela (once a year) 
     if it%ntpy == 1:
         # lists the elements of elaswch that are equal or smaller than it
         [ielanow] = np.nonzero(elaswch<=it) 
         # the last one is the current ela
-        ela       = elalist[ielanow[-1]]   
+        ela       = elalist[ielanow[-1]]
+        ### mass calculation
+        iy = it//ntpy  
+        mass_bef = np.sum(hice) * dx * rho
+        #mass calculateion at the beginning of each ela 
+        if it % (years * ntpy) == 1:  # Every 100 years
+            mass_initial.append(mass_bef)
+            print(f"Year {iy}: Mass initial = {mass_bef}, ELA = {ela}")
+
         
     smb[:] = (h-ela)*beta
     smb[:] = np.where(smb>maxb, maxb, smb) 
     
     hice += smb/ntpy
-    hice -= dt*dFdx # minus sign added
+    hice += dt*dFdx # minus sign added
     hice[:] = np.where(hice<0., 0., hice) # remove negative ice thicknesses
-    
     if ZeroFluxBoundary == False:
         hice[0] = hice[-1] = 0.
     
@@ -148,6 +159,12 @@ for it in range(1, ntpy*nyear+1):
         lengthmem[iy] = np.sum(np.where(hice>0.1, dx, 0.))
         volumemem[iy] = np.sum(hice)*dx
         elamemory[iy] = ela
+        mass[iy] = volumemem[iy] * rho
+        #print(f"Year {iy}: Mass = {mass[iy]}, ELA = {elamemory[iy]}")
+        # mass after ELA change
+        if it % (years * ntpy) == 0:  # Every 100 years and 200 timesteps
+            mass_change_ela.append(mass[iy])
+            print(f"Year {iy}: Mass final = {mass[iy]}, ELA = {elamemory[iy]}")
 
     if it%(ndyfigure*ntpy) == 0:
         iframes            += 1
@@ -160,8 +177,21 @@ for it in range(1, ntpy*nyear+1):
             if hice[-1]>1.:
                 print("Ice at end of domain!")
                 break
-        
-#------------------------------------------------------------------------------        
+
+#------------------------------------------------------------------------------       
+
+print(np.size(mass_initial))
+print(mass_initial)
+print(np.size(mass_change_ela))
+print(mass_change_ela)
+print("Calculating change: ")
+mass_change = [a - b for a, b in zip(mass_change_ela, mass_initial)]
+
+print(mass_change)
+
+
+#-------------------------------------------------------------------------------
+
 # at this point, the simulation is completed.        
 # the following is needed to make the animation        
 fig  = plt.figure()
@@ -219,7 +249,7 @@ ani = animation.FuncAnimation(fig, animate, np.arange(iframes),\
     
 
 #------------------------------------------------------------------------------ 
-# postprocessing
+# postprocessing - estimating responsetime after knowing the change
 def get_responsetime(dataarray, initial_year):  
     print('Define your function to estimate the response time for the change after year {0:4d}'.format(initial_year))
     response_time = 0.     
@@ -245,9 +275,10 @@ for i in range(1,nela):
 
 
 fig2,ax2a = plt.subplots()
-ax2a.plot(yearlist,lengthmem/1000. ,'k')
+#ax2a.plot(yearlist,lengthmem/1000. ,'k')
+ax2a.plot(yearlist,volumemem/1000. ,'k')
 ax2a.set_xlabel('Model year (yr)')
-ax2a.set_ylabel('Glacier length (km)')
+ax2a.set_ylabel('Glacier volume (km^3)')
 ax2a.set_xlim([0, nyear])
 lmima = [ np.min(lengthmem/1000.), np.max(lengthmem/1000.) ]
 for i in range(1,nela):
@@ -259,8 +290,10 @@ ax2b.plot(yearlist, elamemory, color=color)
 ax2b.set_ylabel('Ela', color=color)
 ax2b.tick_params(axis='y', labelcolor=color)   
 fig2.tight_layout()
-fig2.savefig('../figures/glacierlength.png', dpi=300)
+fig2.savefig('..\figures\glacierlength.png', dpi=300)
     
+plt.show()
+
 fig3,ax3 = plt.subplots()
 ax3.scatter(elalist[1:], ResponseTimes[1:])
 fig3.savefig('../figures/responsetime.png', dpi=300)        
