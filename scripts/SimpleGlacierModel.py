@@ -23,7 +23,7 @@ rho   =  917.      # kg/m3
 g     =    9.80665 # m/s2
 fd    =    1.9E-24 # # pa-3 s-1 # this value and dimension is only correct for n=3
 fs    =    5.7E-20 # # pa-3 m2 s-1 # this value and dimension is only correct for n=3
-years = 100
+years = 200
 
 # adjusted: elalist and elayear. See source file in main directory
 elalist = np.linspace(1400., 2200., 9)  # m
@@ -59,13 +59,14 @@ smb    = np.zeros(nx)
 
 # preparations for the ela-selection
 # elaswch is a list of time steps on which a new ela value should be used.
-nyear    = int(np.sum(elayear))
+nyear    = int(np.sum(elayear)) + 500
 nela     = np.size(elalist)
 if nela != np.size(elayear):
     print("the arrays of elalist and elayear do not have the same length!")
     exit()
 else:
     elaswch = np.zeros(nela)
+    elaswch[0]=500*ntpy
     for i in range(0,nela-1):
         elaswch[i+1] = elaswch[i] + (elayear[i]*ntpy)
     ela     = elalist[0]
@@ -129,17 +130,20 @@ for it in range(1, ntpy*nyear+1):
     # calculate smb (per year)
     # first update ela (once a year) 
     if it%ntpy == 1:
-        # lists the elements of elaswch that are equal or smaller than it
-        [ielanow] = np.nonzero(elaswch<=it) 
-        # the last one is the current ela
-        ela       = elalist[ielanow[-1]]
-        ### mass calculation
-        iy = it//ntpy  
+        if it>500*ntpy:
+            # lists the elements of elaswch that are equal or smaller than it
+            [ielanow] = np.nonzero(elaswch<=it) 
+            # the last one is the current ela
+            ela       = elalist[ielanow[-1]]
+            ### mass calculation
+        iy = it//ntpy
         mass_bef = np.sum(hice) * dx * rho
         #mass calculateion at the beginning of each ela 
         if it % (years * ntpy) == 1:  # Every 100 years
             mass_initial.append(mass_bef)
             print(f"Year {iy}: Mass initial = {mass_bef}, ELA = {ela}")
+       
+
 
         
     smb[:] = (h-ela)*beta
@@ -186,7 +190,6 @@ print(np.size(mass_change_ela))
 print(mass_change_ela)
 print("Calculating change: ")
 mass_change = [a - b for a, b in zip(mass_change_ela, mass_initial)]
-
 print(mass_change)
 
 
@@ -249,10 +252,12 @@ ani = animation.FuncAnimation(fig, animate, np.arange(iframes),\
     
 
 #------------------------------------------------------------------------------ 
-# postprocessing - estimating responsetime after knowing the change
 def get_responsetime(dataarray, initial_year):  
     print('Define your function to estimate the response time for the change after year {0:4d}'.format(initial_year))
-    response_time = 0.     
+    delta_length = dataarray[0] - dataarray[-1]
+    print(delta_length)
+    target = delta_length * (1-1/np.e)
+    response_time = np.argmax((dataarray[0]-dataarray) > target)   
 
     return response_time, initial_year + response_time
 
@@ -262,21 +267,20 @@ ResponseYears = np.zeros(nela)
 # The first ela value is excluded from the analysis as that has the spin-up
 # Here, the length is used for the responsetime. One could also take the mass. 
 #  If desired, do not use lengthmem but volumemem.
-ys = elayear[0]
+ys = 500
 for i in range(1,nela):
     if i == nela-1:
         ye = nyear
     else:
         ye = ys + elayear[i]
     ResponseTimes[i], ResponseYears[i] = get_responsetime(lengthmem[ys:ye], ys)
-        
+    print(ys, ye,ResponseTimes)    
     ys = ye
-
-
 
 fig2,ax2a = plt.subplots()
 #ax2a.plot(yearlist,lengthmem/1000. ,'k')
-ax2a.plot(yearlist,volumemem/1000. ,'k')
+ax2a.plot(yearlist,volumemem,'k')
+#ax2a.plot(yearlist,volumemem/1000. ,'k')
 ax2a.set_xlabel('Model year (yr)')
 ax2a.set_ylabel('Glacier volume (km^3)')
 ax2a.set_xlim([0, nyear])
@@ -292,14 +296,14 @@ ax2b.tick_params(axis='y', labelcolor=color)
 fig2.tight_layout()
 fig2.savefig('..\figures\glacierlength.png', dpi=300)
     
-plt.show()
-
 fig3,ax3 = plt.subplots()
 ax3.scatter(elalist[1:], ResponseTimes[1:])
-fig3.savefig('../figures/responsetime.png', dpi=300)        
+fig3.savefig('..\figures\responsetime.png', dpi=300)        
+'''
+fig4,ax4 = plt.subplots()
+ax4.plot(elalist, mass_change[5:], 'k')
+ax4.set_xlabel('ELA')
+ax4.set_ylabel('Glacier mass (kg)')
+'''
 
-   
-
-                        
-
-                        
+plt.show()           
