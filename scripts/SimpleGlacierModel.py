@@ -25,14 +25,12 @@ fd    =    1.9E-24 # # pa-3 s-1 # this value and dimension is only correct for n
 fs    =    5.7E-20 # # pa-3 m2 s-1 # this value and dimension is only correct for n=3
 
 
-# this ELA list is not quite systematic, so make it systematic!
-elalist = np.array([1800., 1750., 1700., 1500., 2200., 1900., 1800.,])  # m
-elayear = np.array([ 100,    100,   100,   150,    10,   100,   100], dtype=int)  # years    
+# adjusted: elalist and elayear. See source file in main directory
+elalist = np.linspace(1400., 2200., 9)  # m
+elayear = np.full_like(elalist, 100, dtype=int)  # years
 beta    =    0.007    # [m/m]/yr
 maxb    =    2.      # m/yr
 
-cd    = rho*g*fd  # <<< this must be adjused according to your discretisation
-cs    = rho*g*fs  # <<< this must be adjused according to your discretisation
 
 
 # Initialisation: start from zero ice and define 
@@ -64,7 +62,7 @@ smb    = np.zeros(nx)
 nyear    = int(np.sum(elayear))
 nela     = np.size(elalist)
 if nela != np.size(elayear):
-    print("the arrays of elalist and elayear does not have the same length!")
+    print("the arrays of elalist and elayear do not have the same length!")
     exit()
 else:
     elaswch = np.zeros(nela)
@@ -93,6 +91,10 @@ volumemem[0] = np.sum(hice)*dx
 elamemory[0] = ela
 
 
+
+cd    = 2./5.*fd*(rho*g)**3  # adjusted
+cs    = fs*(rho*g)**3  # adjusted
+
 #0-----------------------------------------------------------------------------
 print("Run model for {0:3d} years".format(nyear))
 for it in range(1, ntpy*nyear+1):
@@ -114,8 +116,8 @@ for it in range(1, ntpy*nyear+1):
         # the following equations needs to be adjusted according to your discretisation
         dhdx[:-1]  = ((h[1:]-h[:-1])/dx) # so 0 is at 1/2 actually
         # note that flux[1] is at the point 1/2
-        fluxd[1:-2] = cd * dhdx[:-1] * ( ((hice[1:])+(hice[:-1])) * 0.5 )
-        fluxs[1:-2] = cs * dhdx[:-1] * ( ((hice[1:])+(hice[:-1])) * 0.5 )
+        fluxd[1:-2] = cd * (dhdx[:-1])**3 * (0.5*hice[1:] + 0.5 * hice[:-1])**5
+        fluxs[1:-2] = cs * (dhdx[:-1])**3 * (0.5*hice[1:] + 0.5 * hice[:-1])**3
         
         # derive flux convergence
         dFdx[:]  = (fluxd[1:-1]-fluxd[:-2] + fluxs[1:-1]-fluxs[:-2])/dx
@@ -256,10 +258,12 @@ color = 'tab:red'
 ax2b.plot(yearlist, elamemory, color=color)
 ax2b.set_ylabel('Ela', color=color)
 ax2b.tick_params(axis='y', labelcolor=color)   
-
+fig2.tight_layout()
+fig2.savefig('../figures/glacierlength.png', dpi=300)
     
 fig3,ax3 = plt.subplots()
-ax3.scatter(elalist[1:], ResponseTimes[1:])        
+ax3.scatter(elalist[1:], ResponseTimes[1:])
+fig3.savefig('../figures/responsetime.png', dpi=300)        
 
    
 
