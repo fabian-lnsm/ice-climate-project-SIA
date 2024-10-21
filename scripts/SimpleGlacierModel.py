@@ -22,11 +22,11 @@ ndyfigure = 5           # number of years between a figure frame
 rho   =  917.      # kg/m3
 g     =    9.80665 # m/s2
 fd    =    1.9E-24 # # pa-3 s-1 # this value and dimension is only correct for n=3
-fs    =    5.7E-20 # # pa-3 m2 s-1 # this value and dimension is only correct for n=3
-years = 200
+fs    =    5.7E-20 # # pa-3 m2 s-1 # this value and dimensmepawoion is only correct for n=3
+years = 250
 
 # adjusted: elalist and elayear. See source file in main directory
-elalist = np.linspace(1400., 2200., 9)  # m
+elalist = np.linspace(1400., 1600., 10)  # m
 elayear = np.full_like(elalist, years, dtype=int)  # years
 beta    =    0.007    # [m/m]/yr
 maxb    =    2.      # m/yr
@@ -36,7 +36,9 @@ maxb    =    2.      # m/yr
 # Initialisation: start from zero ice and define 
 def get_bedrock(xaxis):
     # here you put in your own equation that defines the bedrock
-    bedrock = 2000. - xaxis*0.08
+    bedrock = 1700. -xaxis*0.05 + 100.* np.exp(-xaxis*0.001)
+    #bedrock = 1700. -xaxis*0.05 + 300.* np.exp(-xaxis*0.001)
+    #bedrock = 1800. - xaxis*0.05
     return bedrock
 
 # Start calculations
@@ -96,12 +98,39 @@ hice = np.where(bedrock>ela, np.where(hice<0.11, 0.11, hice), hice)
 lengthmem[0] = np.sum(np.where(hice>0.1, dx, 0.))
 volumemem[0] = np.sum(hice)*dx
 elamemory[0] = ela
+highest_point_x=[]
+highest_point_h=[]
+end_flow_line_x=[]
+end_flow_line_h=[]
+ela_list = []
 
 cd    = 2./5.*fd*(rho*g)**3  # adjusted
 cs    = fs*(rho*g)**3  # adjusted
-#print(ntpy*nyear+1)
-#print(FluxAtPoints)
-#0----------------------------------------------------------------------------- loop over timesteps
+
+def calculate_flow_line(hsurfmem, bedrock, dx, iframes): # evaluate highest and smalles value and calculate slope through these points   
+ 
+    hsurface = hsurfmem[:, iframes]  # Glacier surface at the final time frame
+    highest_point_index = np.argmax(hsurface)  # Index of the highest surface point
+    
+    # initial position
+    initial_x = highest_point_index * dx / 1000.0
+    initial_h = hsurface[highest_point_index]
+
+###
+    surface_minus_bedrock = hsurface - bedrock
+    right_difference = surface_minus_bedrock[highest_point_index + 1:]  # Values to the right of the highest point because to the left there is always a smaller one 
+
+    # Check if there are values to the right
+    if right_difference.size > 0:
+        index_lowest = np.argmin(right_difference) + (highest_point_index + 1)  # Adjust index to the original array
+        
+        end_x = index_lowest * dx / 1000.0
+        end_h = hsurface[index_lowest]
+    
+    return initial_x, initial_h, end_x, end_h
+
+
+#----------------------------------------------------------------------------- loop over timesteps
 print("Run model for {0:3d} years".format(nyear))
 for it in range(1, ntpy*nyear+1):
     h = hice + bedrock
@@ -138,14 +167,20 @@ for it in range(1, ntpy*nyear+1):
             ### mass calculation
         iy = it//ntpy
         mass_bef = np.sum(hice) * dx * rho
-        #mass calculateion at the beginning of each ela 
+
+        #mass calculation at the beginning of each ela 
         if it % (years * ntpy) == 1:  # Every 100 years
             mass_initial.append(mass_bef)
             print(f"Year {iy}: Mass initial = {mass_bef}, ELA = {ela}")
-       
+            flow_line_x, flow_line_h, flow_line_end_x, flow_line_end_h = calculate_flow_line(hsurfmem, bedrock, dx, iframes)
+            #slope_val, offset_val = calculate_flow_line(hsurfmem, bedrock, dx, iframes)
+            highest_point_x.append(flow_line_x)
+            highest_point_h.append(flow_line_h)
+            end_flow_line_x.append(flow_line_end_x)
+            end_flow_line_h.append(flow_line_end_h)
+            ela_list.append(ela)
 
 
-        
     smb[:] = (h-ela)*beta
     smb[:] = np.where(smb>maxb, maxb, smb) 
     
@@ -164,7 +199,6 @@ for it in range(1, ntpy*nyear+1):
         volumemem[iy] = np.sum(hice)*dx
         elamemory[iy] = ela
         mass[iy] = volumemem[iy] * rho
-        #print(f"Year {iy}: Mass = {mass[iy]}, ELA = {elamemory[iy]}")
         # mass after ELA change
         if it % (years * ntpy) == 0:  # Every 100 years and 200 timesteps
             mass_change_ela.append(mass[iy])
@@ -182,18 +216,10 @@ for it in range(1, ntpy*nyear+1):
                 print("Ice at end of domain!")
                 break
 
-#------------------------------------------------------------------------------       
-
-print(np.size(mass_initial))
-print(mass_initial)
-print(np.size(mass_change_ela))
-print(mass_change_ela)
-print("Calculating change: ")
 mass_change = [a - b for a, b in zip(mass_change_ela, mass_initial)]
-print(mass_change)
 
 
-#-------------------------------------------------------------------------------
+#--------------------------------- Animation -----------------------------
 
 # at this point, the simulation is completed.        
 # the following is needed to make the animation        
@@ -229,7 +255,6 @@ def init_anim():
     ifdline.set_data([], [])
     fxdline.set_data([], [])
     fxsline.set_data([], [])
-
     return bedrline, hsrfline, time_text, smbline, ifdline, fxdline, fxsline
 
 # update the animation with data for saved frame #tf
@@ -241,7 +266,6 @@ def animate(tf):
     ifdline.set_data(xaxis/1000.,  ifdmem[:,tf])
     fxdline.set_data(xhaxs      ,  fldmem[:,tf])
     fxsline.set_data(xhaxs      ,  flsmem[:,tf])
-    
     return bedrline, hsrfline, time_text, smbline, ifdline, fxdline, fxsline
     
 # call and run animation
@@ -250,12 +274,10 @@ ani = animation.FuncAnimation(fig, animate, np.arange(iframes),\
 
 # SAVING PYTHON MOVIES IS PLATFORM DEPENDEND.     
     
-
-#------------------------------------------------------------------------------ 
+#-------------------------- Response Time -----------------------------------
 def get_responsetime(dataarray, initial_year):  
     print('Define your function to estimate the response time for the change after year {0:4d}'.format(initial_year))
     delta_length = dataarray[0] - dataarray[-1]
-    print(delta_length)
     target = delta_length * (1-1/np.e)
     response_time = np.argmax((dataarray[0]-dataarray) > target)   
 
@@ -274,13 +296,13 @@ for i in range(1,nela):
     else:
         ye = ys + elayear[i]
     ResponseTimes[i], ResponseYears[i] = get_responsetime(lengthmem[ys:ye], ys)
-    print(ys, ye,ResponseTimes)    
+    #print(ys, ye,ResponseTimes)    
     ys = ye
 
+#-------------------------------- Volume Vs Time -------------------------------
+
 fig2,ax2a = plt.subplots()
-#ax2a.plot(yearlist,lengthmem/1000. ,'k')
 ax2a.plot(yearlist,volumemem,'k')
-#ax2a.plot(yearlist,volumemem/1000. ,'k')
 ax2a.set_xlabel('Model year (yr)')
 ax2a.set_ylabel('Glacier volume (km^3)')
 ax2a.set_xlim([0, nyear])
@@ -295,15 +317,31 @@ ax2b.set_ylabel('Ela', color=color)
 ax2b.tick_params(axis='y', labelcolor=color)   
 fig2.tight_layout()
 fig2.savefig('..\figures\glacierlength.png', dpi=300)
-    
+
+#-------------------------------- Response Time Plot --------------------------       
+
 fig3,ax3 = plt.subplots()
 ax3.scatter(elalist[1:], ResponseTimes[1:])
-fig3.savefig('..\figures\responsetime.png', dpi=300)        
-'''
+fig3.savefig('..\figures\responsetime.png', dpi=300) 
+ax3.set_xlabel('ELA')
+ax3.set_ylabel('Response Time (s)')       
+
+#-------------------------------- Mass Change ---------------------------------      
+
 fig4,ax4 = plt.subplots()
-ax4.plot(elalist, mass_change[5:], 'k')
+ax4.scatter(elalist[1:], mass_change[3:])
 ax4.set_xlabel('ELA')
 ax4.set_ylabel('Glacier mass (kg)')
-'''
+
+
+#-------------------------------- Flow Line ------------------------------------      
+#Plot the flow line on top of the glacier surface
+fig5, ax5 = plt.subplots()
+for i in range(3, len(highest_point_x)):
+    ax5.plot([highest_point_x[i], end_flow_line_x[i]], [highest_point_h[i], end_flow_line_h[i]], label=f'FLow line for ELA = {ela_list[i-1]:.0f}', linestyle='-', marker=None)
+
+ax5.set_xlabel('Distance (km)')
+ax5.set_ylabel('Elevation (m)')
+ax5.legend()
 
 plt.show()           
