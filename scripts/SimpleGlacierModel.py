@@ -23,7 +23,7 @@ rho   =  917.      # kg/m3
 g     =    9.80665 # m/s2
 fd    =    1.9E-24 # # pa-3 s-1 # this value and dimension is only correct for n=3
 fs    =    5.7E-20 # # pa-3 m2 s-1 # this value and dimensmepawoion is only correct for n=3
-years = 250
+years = 500
 
 # adjusted: elalist and elayear. See source file in main directory
 elalist = np.linspace(1400., 1600., 10)  # m
@@ -328,10 +328,10 @@ ax3.set_ylabel('Response Time (s)')
 
 #-------------------------------- Mass Change ---------------------------------      
 
-fig4,ax4 = plt.subplots()
-ax4.scatter(elalist[1:], mass_change[3:])
-ax4.set_xlabel('ELA')
-ax4.set_ylabel('Glacier mass (kg)')
+#fig4,ax4 = plt.subplots()
+#ax4.scatter(elalist[1:], mass_change[3:])
+#ax4.set_xlabel('ELA')
+#ax4.set_ylabel('Glacier mass (kg)')
 
 
 #-------------------------------- Flow Line ------------------------------------      
