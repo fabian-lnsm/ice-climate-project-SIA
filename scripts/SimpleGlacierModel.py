@@ -26,7 +26,7 @@ fs    =    5.7E-20 # # pa-3 m2 s-1 # this value and dimensmepawoion is only corr
 years = 500
 
 # adjusted: elalist and elayear. See source file in main directory
-elalist = np.linspace(1400., 1600., 10)  # m
+elalist = np.linspace(1400., 1600., 9)  # m
 elayear = np.full_like(elalist, years, dtype=int)  # years
 beta    =    0.007    # [m/m]/yr
 maxb    =    2.      # m/yr
@@ -89,7 +89,7 @@ elamemory = np.zeros(nyear+1)
 yearlist  = np.arange(nyear+1)
 
 #mass calculation
-mass = np.arange(nyear+1)
+mass = np.arange(nyear+1, dtype=float)
 mass_change_ela = []
 mass_initial = []
 
@@ -185,7 +185,7 @@ for it in range(1, ntpy*nyear+1):
     smb[:] = np.where(smb>maxb, maxb, smb) 
     
     hice += smb/ntpy
-    hice += dt*dFdx # minus sign added
+    hice += dt*dFdx 
     hice[:] = np.where(hice<0., 0., hice) # remove negative ice thicknesses
     if ZeroFluxBoundary == False:
         hice[0] = hice[-1] = 0.
@@ -203,6 +203,7 @@ for it in range(1, ntpy*nyear+1):
         if it % (years * ntpy) == 0:  # Every 100 years and 200 timesteps
             mass_change_ela.append(mass[iy])
             print(f"Year {iy}: Mass final = {mass[iy]}, ELA = {elamemory[iy]}")
+            #print(f'Save mass change: {mass_change_ela}')
 
     if it%(ndyfigure*ntpy) == 0:
         iframes            += 1
@@ -216,8 +217,11 @@ for it in range(1, ntpy*nyear+1):
                 print("Ice at end of domain!")
                 break
 
-mass_change = [a - b for a, b in zip(mass_change_ela, mass_initial)]
-
+mass_change_ela = np.array(mass_change_ela[1:]) #leave out the mass after 500 years (no ela-switch here)
+#mass_change = [a - b for a, b in zip(mass_change_ela, mass_initial)]
+mass_change = mass_change_ela[1:] - mass_change_ela[:-1]
+#print(mass_change)
+#print(mass_initial)
 
 #--------------------------------- Animation -----------------------------
 
@@ -229,22 +233,32 @@ ax1  = fig.add_subplot(311, autoscale_on=False, xlim=(0,totL/1000.), \
 mina2 = min(np.min(smbmem),np.min(ifdmem))
 maxa2 = max(np.max(smbmem),np.max(ifdmem))
 ax2   = fig.add_subplot(312, autoscale_on=False, xlim=(0,totL/1000.), \
-                      ylim=(mina2,maxa2))
+                      ylim=(mina2,maxa2), sharex=ax1)
 mina3 = min(np.min(fldmem),np.min(flsmem))
 maxa3 = max(np.max(fldmem),np.max(flsmem))
 ax3   = fig.add_subplot(313, autoscale_on=False, xlim=(0,totL/1000.), \
-                      ylim=(mina3,maxa3))
+                      ylim=(mina3,maxa3), sharex=ax1)
+ax1.set_ylabel('Elevation [m]')
+ax2.set_ylabel('[m/yr]')
+ax3.set_ylabel(r'Flux [$m^2$/yr]')
+ax3.set_xlabel('Length [km]')
+ax1.tick_params(labelbottom=False)
+ax2.tick_params(labelbottom=False)
+
 
 
 # define the line types
-bedrline, = ax1.plot([],[],'-', c='saddlebrown') 
-hsrfline, = ax1.plot([],[],'-', c='navy')
+bedrline, = ax1.plot([],[],'-', c='saddlebrown', label = 'Bedrock') 
+hsrfline, = ax1.plot([],[],'-', c='navy', label = 'Glacier surface')
+ax1.legend()
 time_template = 'time = %d y'
 time_text = ax1.text(0.5, 0.92, '', transform=ax1.transAxes )
-smbline,  = ax2.plot([],[],'-', c='navy')
-ifdline,  = ax2.plot([],[],'-', c='red')
-fxdline,  = ax3.plot([],[],'-', c='navy')
-fxsline,  = ax3.plot([],[],'-', c='red')
+smbline,  = ax2.plot([],[],'-', c='navy', label = 'SMB')
+ifdline,  = ax2.plot([],[],'-', c='red', label = 'dF/dx')
+ax2.legend()
+fxdline,  = ax3.plot([],[],'-', c='navy', label = 'Deformation flux')
+fxsline,  = ax3.plot([],[],'-', c='red', label = 'Sliding flux')
+ax3.legend()
 
 # initialize the animation
 def init_anim():
@@ -273,10 +287,11 @@ ani = animation.FuncAnimation(fig, animate, np.arange(iframes),\
          interval=25, blit=True, init_func=init_anim, )     
 
 # SAVING PYTHON MOVIES IS PLATFORM DEPENDEND.     
-    
+writervideo = animation.FFMpegWriter(bitrate=2000, fps = 45)
+ani.save('../movies/animation.mp4', writer=writervideo, dpi=400)
+print('Movie has been saved')
 #-------------------------- Response Time -----------------------------------
 def get_responsetime(dataarray, initial_year):  
-    print('Define your function to estimate the response time for the change after year {0:4d}'.format(initial_year))
     delta_length = dataarray[0] - dataarray[-1]
     target = delta_length * (1-1/np.e)
     response_time = np.argmax((dataarray[0]-dataarray) > target)   
@@ -290,11 +305,8 @@ ResponseYears = np.zeros(nela)
 # Here, the length is used for the responsetime. One could also take the mass. 
 #  If desired, do not use lengthmem but volumemem.
 ys = 500
-for i in range(1,nela):
-    if i == nela-1:
-        ye = nyear
-    else:
-        ye = ys + elayear[i]
+for i in range(0,nela):
+    ye = ys + elayear[i]
     ResponseTimes[i], ResponseYears[i] = get_responsetime(lengthmem[ys:ye], ys)
     #print(ys, ye,ResponseTimes)    
     ys = ye
@@ -302,9 +314,10 @@ for i in range(1,nela):
 #-------------------------------- Volume Vs Time -------------------------------
 
 fig2,ax2a = plt.subplots()
+ax2a.grid(True, alpha=0.5)
 ax2a.plot(yearlist,volumemem,'k')
-ax2a.set_xlabel('Model year (yr)')
-ax2a.set_ylabel('Glacier volume (km^3)')
+ax2a.set_xlabel('Model years')
+ax2a.set_ylabel(r'Glacier volume [$km^3$]')
 ax2a.set_xlim([0, nyear])
 lmima = [ np.min(lengthmem/1000.), np.max(lengthmem/1000.) ]
 for i in range(1,nela):
@@ -313,35 +326,43 @@ for i in range(1,nela):
 ax2b  = ax2a.twinx()
 color = 'tab:red'
 ax2b.plot(yearlist, elamemory, color=color)
-ax2b.set_ylabel('Ela', color=color)
+ax2b.set_ylabel('ELA [m]', color=color)
 ax2b.tick_params(axis='y', labelcolor=color)   
 fig2.tight_layout()
-fig2.savefig('..\figures\glacierlength.png', dpi=300)
+fig2.savefig('../figures/glacierlength.png', dpi=300)
 
 #-------------------------------- Response Time Plot --------------------------       
 
 fig3,ax3 = plt.subplots()
-ax3.scatter(elalist[1:], ResponseTimes[1:])
-fig3.savefig('..\figures\responsetime.png', dpi=300) 
-ax3.set_xlabel('ELA')
-ax3.set_ylabel('Response Time (s)')       
+ax3.grid(True, alpha=0.3)
+ax3.scatter(elalist[1:], ResponseTimes[1:], color='purple', label='Observed response times', s=35)
+ax3.hlines(np.mean(ResponseTimes[1:]), elalist[1], elalist[-1], color='black', label='Mean response time', linestyles='dashed')
+ax3.set_xlabel('ELA [m]')
+ax3.set_ylabel('Time [yr]')  
+ax3.set_ylim([100, 200])
+ax3.legend()
+fig3.savefig('../figures/responsetimes.png', dpi=300)    
 
 #-------------------------------- Mass Change ---------------------------------      
 
-#fig4,ax4 = plt.subplots()
-#ax4.scatter(elalist[1:], mass_change[3:])
-#ax4.set_xlabel('ELA')
-#ax4.set_ylabel('Glacier mass (kg)')
+fig4,ax4 = plt.subplots()
+print('ELA: ',elalist[1:])
+print('Mass change: ', mass_change[:])
+ax4.scatter(elalist[1:], mass_change[:])
+ax4.set_xlabel('ELA [m]')
+ax4.set_ylabel('Glacier mass [kg]')
+ax4.grid(True, alpha=0.5)
+fig4.savefig('../figures/masschanges.png', dpi=300)
 
 
 #-------------------------------- Flow Line ------------------------------------      
 #Plot the flow line on top of the glacier surface
 fig5, ax5 = plt.subplots()
 for i in range(3, len(highest_point_x)):
-    ax5.plot([highest_point_x[i], end_flow_line_x[i]], [highest_point_h[i], end_flow_line_h[i]], label=f'FLow line for ELA = {ela_list[i-1]:.0f}', linestyle='-', marker=None)
-
-ax5.set_xlabel('Distance (km)')
-ax5.set_ylabel('Elevation (m)')
+    ax5.plot([highest_point_x[i], end_flow_line_x[i]], [highest_point_h[i], end_flow_line_h[i]], label=f'ELA = {ela_list[i-1]:.0f}', linestyle='-', marker=None)
+ax5.set_xlabel('Distance [km]')
+ax5.set_ylabel('Elevation [m]')
+ax5.grid(True, alpha=0.5)
 ax5.legend()
+fig5.savefig('../figures/flowlines.png', dpi=300)
 
-plt.show()           
