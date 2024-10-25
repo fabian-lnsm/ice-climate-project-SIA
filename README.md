@@ -4,8 +4,7 @@ Simulation of the SIA flow model as part of the course on Ice&Climate at UU. The
 
 ## Folder structure
 
-Main script is the SimpleGlacierModel.py in the scripts folder.
-See figures and movies for output created by the scripts
+Main script is the SimpleGlacierModel.py in the scripts folder. The main folder contains the project instructions and final report. See figures and movies for output created by the script.
 
 ## Contribute
 
