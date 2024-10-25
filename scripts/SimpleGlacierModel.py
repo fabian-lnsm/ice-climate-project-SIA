@@ -359,7 +359,7 @@ fig4.savefig('../figures/masschanges.png', dpi=300)
 #Plot the flow line on top of the glacier surface
 fig5, ax5 = plt.subplots()
 for i in range(3, len(highest_point_x)):
-    ax5.plot([highest_point_x[i], end_flow_line_x[i]], [highest_point_h[i], end_flow_line_h[i]], label=f'ELA = {ela_list[i-1]:.0f}', linestyle='-', marker=None)
+    ax5.plot([highest_point_x[i], end_flow_line_x[i]], [highest_point_h[i], end_flow_line_h[i]], label=f'ELA = {ela_list[i]:.0f}', linestyle='-', marker=None)
 ax5.set_xlabel('Distance [km]')
 ax5.set_ylabel('Elevation [m]')
 ax5.grid(True, alpha=0.5)
